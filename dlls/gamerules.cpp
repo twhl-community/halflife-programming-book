@@ -202,6 +202,9 @@ void CGameRules::RefreshSkillData()
 	// Apache
 	gSkillData.apacheHealth = GetSkillCvar("sk_apache_health");
 
+	// Armored Man
+	gSkillData.armormanHealth = GetSkillCvar("sk_armorman_health");
+
 	// Barney
 	gSkillData.barneyHealth = GetSkillCvar("sk_barney_health");
 

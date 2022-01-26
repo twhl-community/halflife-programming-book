@@ -62,6 +62,11 @@ cvar_t sk_apache_health1 = {"sk_apache_health1", "0"};
 cvar_t sk_apache_health2 = {"sk_apache_health2", "0"};
 cvar_t sk_apache_health3 = {"sk_apache_health3", "0"};
 
+// Armored Man
+cvar_t sk_armorman_health1 = {"sk_armorman_health1", "0"};
+cvar_t sk_armorman_health2 = {"sk_armorman_health2", "0"};
+cvar_t sk_armorman_health3 = {"sk_armorman_health3", "0"};
+
 // Barney
 cvar_t sk_barney_health1 = {"sk_barney_health1", "0"};
 cvar_t sk_barney_health2 = {"sk_barney_health2", "0"};
@@ -530,6 +535,11 @@ void GameDLLInit()
 	CVAR_REGISTER(&sk_apache_health1); // {"sk_apache_health1","0"};
 	CVAR_REGISTER(&sk_apache_health2); // {"sk_apache_health2","0"};
 	CVAR_REGISTER(&sk_apache_health3); // {"sk_apache_health3","0"};
+
+	// Armored Man
+	CVAR_REGISTER(&sk_armorman_health1); // {"sk_armorman_health1","0"};
+	CVAR_REGISTER(&sk_armorman_health2); // {"sk_armorman_health2","0"};
+	CVAR_REGISTER(&sk_armorman_health3); // {"sk_armorman_health3","0"};
 
 	// Barney
 	CVAR_REGISTER(&sk_barney_health1); // {"sk_barney_health1","0"};

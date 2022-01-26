@@ -29,6 +29,8 @@ struct skilldata_t
 
 	float apacheHealth;
 
+	float armormanHealth;
+
 	float barneyHealth;
 
 	float bigmommaHealthFactor; // Multiply each node's health by this
