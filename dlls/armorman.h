@@ -35,6 +35,10 @@
 
 #pragma once
 
+constexpr int ARMORMAN_AE_SHOOT = 3;
+
+#define ARMORMAN_SHOTGUN_OFFSET Vector(0.0f, 0.0f, 55.0f)
+
 class CArmorMan : public CBaseMonster
 {
 public:
@@ -44,4 +48,16 @@ public:
 	int Classify() override;
 
 	void SetYawSpeed() override;
+
+	bool CheckRangeAttack1(float flDot, float flDist) override;
+
+	void HandleAnimEvent(MonsterEvent_t* pEvent) override;
+
+	bool Save(CSave& save) override;
+	bool Restore(CRestore& restore) override;
+	static TYPEDESCRIPTION m_SaveData[];
+
+private:
+	bool m_bLastCheckAttackResult;
+	float m_flNextCheckAttackTime;
 };

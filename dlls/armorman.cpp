@@ -38,10 +38,19 @@
 #include "cbase.h"
 
 #include "monsters.h"
+#include "soundent.h"
+#include "weapons.h"
 
 #include "armorman.h"
 
 
+
+TYPEDESCRIPTION CArmorMan::m_SaveData[] =
+	{
+		DEFINE_FIELD(CArmorMan, m_bLastCheckAttackResult, FIELD_BOOLEAN),
+		DEFINE_FIELD(CArmorMan, m_flNextCheckAttackTime, FIELD_TIME),
+};
+IMPLEMENT_SAVERESTORE(CArmorMan, CBaseMonster);
 
 LINK_ENTITY_TO_CLASS(monster_armorman, CArmorMan);
 
@@ -69,6 +78,9 @@ void CArmorMan::Spawn()
 void CArmorMan::Precache()
 {
 	PRECACHE_MODEL("models/armorman.mdl");
+
+	PRECACHE_SOUND("weapons/dbarrel1.wav");
+	PRECACHE_SOUND("weapons/sbarrel1.wav");
 }
 
 int CArmorMan::Classify()
@@ -81,4 +93,60 @@ int CArmorMan::Classify()
 void CArmorMan::SetYawSpeed()
 {
 	pev->yaw_speed = 200.0f;
+}
+
+
+
+bool CArmorMan::CheckRangeAttack1(float flDot, float flDist)
+{
+	if (flDist > 1024.0f || flDot < 0.5f)
+		return false;
+
+	if (gpGlobals->time <= m_flNextCheckAttackTime)
+		return m_bLastCheckAttackResult;
+
+	const Vector vecShootOrigin = pev->origin + ARMORMAN_SHOTGUN_OFFSET;
+	CBaseEntity* pEnemy = m_hEnemy;
+	const Vector vecShootTarget = pEnemy->BodyTarget(vecShootOrigin) - pEnemy->pev->origin + m_vecEnemyLKP;
+
+	TraceResult tr;
+	UTIL_TraceLine(vecShootOrigin, vecShootTarget, dont_ignore_monsters, ENT(pev), &tr);
+	if (tr.flFraction == 1.0f || tr.pHit && Instance(tr.pHit) == pEnemy)
+		m_bLastCheckAttackResult = true;
+	else
+		m_bLastCheckAttackResult = false;
+
+	m_flNextCheckAttackTime = gpGlobals->time + 1.5f;
+	return m_bLastCheckAttackResult;
+}
+
+
+
+void CArmorMan::HandleAnimEvent(MonsterEvent_t* pEvent)
+{
+	if (pEvent->event != ARMORMAN_AE_SHOOT)
+	{
+		CBaseMonster::HandleAnimEvent(pEvent);
+		return;
+	}
+
+	UTIL_MakeVectors(pev->angles);
+	const Vector vecShootOrigin = pev->origin + ARMORMAN_SHOTGUN_OFFSET;
+	const Vector vecShootDir = ShootAtEnemy(vecShootOrigin);
+
+	const Vector vecAngDir = UTIL_VecToAngles(vecShootDir);
+	SetBlending(0, vecAngDir.x);
+	pev->effects = EF_MUZZLEFLASH;
+
+	if (m_hEnemy && (m_hEnemy->pev->origin - pev->origin).Length() <= 256.0f)
+	{
+		FireBullets(12, vecShootOrigin, vecShootDir, VECTOR_CONE_15DEGREES, 1024.0f, BULLET_PLAYER_BUCKSHOT);
+		EMIT_SOUND_DYN(ENT(pev), CHAN_WEAPON, "weapons/dbarrel1.wav", VOL_NORM, ATTN_NORM, 0, PITCH_NORM);
+	}
+	else
+	{
+		FireBullets(6, vecShootOrigin, vecShootDir, VECTOR_CONE_10DEGREES, 1024.0f, BULLET_PLAYER_BUCKSHOT);
+		EMIT_SOUND_DYN(ENT(pev), CHAN_WEAPON, "weapons/sbarrel1.wav", VOL_NORM, ATTN_NORM, 0, PITCH_NORM);
+	}
+	CSoundEnt::InsertSound(bits_SOUND_COMBAT, pev->origin, 384, 0.3f);
 }
