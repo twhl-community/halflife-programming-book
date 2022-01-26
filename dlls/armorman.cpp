@@ -45,6 +45,27 @@
 
 
 
+Task_t tlArmorManReload[] =
+	{
+		{TASK_STOP_MOVING, 0.0f},
+		{TASK_FACE_ENEMY, 0.0f},
+		{TASK_PLAY_SEQUENCE, ACT_RELOAD},
+};
+
+Schedule_t slArmorManReload[] =
+	{
+		{tlArmorManReload,
+			ARRAYSIZE(tlArmorManReload),
+			bits_COND_HEAVY_DAMAGE | bits_COND_HEAR_SOUND,
+			bits_SOUND_DANGER,
+			"ArmorMan Reload"},
+};
+
+DEFINE_CUSTOM_SCHEDULES(CArmorMan) {
+	slArmorManReload,
+};
+IMPLEMENT_CUSTOM_SCHEDULES(CArmorMan, CBaseMonster);
+
 TYPEDESCRIPTION CArmorMan::m_SaveData[] =
 	{
 		DEFINE_FIELD(CArmorMan, m_bLastCheckAttackResult, FIELD_BOOLEAN),
@@ -71,6 +92,8 @@ void CArmorMan::Spawn()
 	m_flFieldOfView = VIEW_FIELD_WIDE;
 	m_MonsterState = MONSTERSTATE_NONE;
 	m_afCapability = bits_CAP_HEAR | bits_CAP_DOORS_GROUP | bits_CAP_TURN_HEAD | bits_CAP_RANGE_ATTACK1;
+
+	m_cAmmoLoaded = 2;
 
 	MonsterInit();
 }
@@ -122,31 +145,75 @@ bool CArmorMan::CheckRangeAttack1(float flDot, float flDist)
 
 
 
+void CArmorMan::CheckAmmo()
+{
+	if (m_cAmmoLoaded <= 0)
+		SetConditions(bits_COND_NO_AMMO_LOADED);
+}
+
 void CArmorMan::HandleAnimEvent(MonsterEvent_t* pEvent)
 {
-	if (pEvent->event != ARMORMAN_AE_SHOOT)
+	switch (pEvent->event)
 	{
+	case ARMORMAN_AE_SHOOT:
+	{
+		UTIL_MakeVectors(pev->angles);
+		const Vector vecShootOrigin = pev->origin + ARMORMAN_SHOTGUN_OFFSET;
+		const Vector vecShootDir = ShootAtEnemy(vecShootOrigin);
+
+		const Vector vecAngDir = UTIL_VecToAngles(vecShootDir);
+		SetBlending(0, vecAngDir.x);
+		pev->effects = EF_MUZZLEFLASH;
+
+		if (m_cAmmoLoaded >= 2 && m_hEnemy && (m_hEnemy->pev->origin - pev->origin).Length() <= 256.0f)
+		{
+			FireBullets(12, vecShootOrigin, vecShootDir, VECTOR_CONE_15DEGREES, 1024.0f, BULLET_PLAYER_BUCKSHOT);
+			EMIT_SOUND_DYN(ENT(pev), CHAN_WEAPON, "weapons/dbarrel1.wav", VOL_NORM, ATTN_NORM, 0, PITCH_NORM);
+			m_cAmmoLoaded -= 2;
+		}
+		else
+		{
+			FireBullets(6, vecShootOrigin, vecShootDir, VECTOR_CONE_10DEGREES, 1024.0f, BULLET_PLAYER_BUCKSHOT);
+			EMIT_SOUND_DYN(ENT(pev), CHAN_WEAPON, "weapons/sbarrel1.wav", VOL_NORM, ATTN_NORM, 0, PITCH_NORM);
+			m_cAmmoLoaded--;
+		}
+		CSoundEnt::InsertSound(bits_SOUND_COMBAT, pev->origin, 384, 0.3f);
+	}
+	break;
+	case ARMORMAN_AE_RELOAD:
+		m_cAmmoLoaded += 2;
+		ClearConditions(bits_COND_NO_AMMO_LOADED);
+		break;
+	default:
 		CBaseMonster::HandleAnimEvent(pEvent);
+	}
+}
+
+
+
+Schedule_t* CArmorMan::GetSchedule()
+{
+	if (m_MonsterState == MONSTERSTATE_COMBAT && HasConditions(bits_COND_NO_AMMO_LOADED))
+		return GetScheduleOfType(SCHED_RELOAD);
+
+	return CBaseMonster::GetSchedule();
+}
+
+Schedule_t* CArmorMan::GetScheduleOfType(int Type)
+{
+	if (Type == SCHED_RELOAD)
+		return slArmorManReload;
+
+	return CBaseMonster::GetScheduleOfType(Type);
+}
+
+void CArmorMan::RunTask(Task_t* pTask)
+{
+	if (pTask->iTask == TASK_RELOAD)
+	{
+		m_IdealActivity = ACT_RELOAD;
 		return;
 	}
 
-	UTIL_MakeVectors(pev->angles);
-	const Vector vecShootOrigin = pev->origin + ARMORMAN_SHOTGUN_OFFSET;
-	const Vector vecShootDir = ShootAtEnemy(vecShootOrigin);
-
-	const Vector vecAngDir = UTIL_VecToAngles(vecShootDir);
-	SetBlending(0, vecAngDir.x);
-	pev->effects = EF_MUZZLEFLASH;
-
-	if (m_hEnemy && (m_hEnemy->pev->origin - pev->origin).Length() <= 256.0f)
-	{
-		FireBullets(12, vecShootOrigin, vecShootDir, VECTOR_CONE_15DEGREES, 1024.0f, BULLET_PLAYER_BUCKSHOT);
-		EMIT_SOUND_DYN(ENT(pev), CHAN_WEAPON, "weapons/dbarrel1.wav", VOL_NORM, ATTN_NORM, 0, PITCH_NORM);
-	}
-	else
-	{
-		FireBullets(6, vecShootOrigin, vecShootDir, VECTOR_CONE_10DEGREES, 1024.0f, BULLET_PLAYER_BUCKSHOT);
-		EMIT_SOUND_DYN(ENT(pev), CHAN_WEAPON, "weapons/sbarrel1.wav", VOL_NORM, ATTN_NORM, 0, PITCH_NORM);
-	}
-	CSoundEnt::InsertSound(bits_SOUND_COMBAT, pev->origin, 384, 0.3f);
+	CBaseMonster::RunTask(pTask);
 }
