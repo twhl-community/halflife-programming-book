@@ -66,6 +66,9 @@
     <ClCompile Include="..\..\dlls\apache.cpp">
       <Filter>Source Files\dlls</Filter>
     </ClCompile>
+     <ClCompile Include="..\..\dlls\armorman.cpp">
+      <Filter>Source Files\dlls</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\dlls\barnacle.cpp">
       <Filter>Source Files\dlls</Filter>
     </ClCompile>
@@ -378,6 +381,9 @@
       <Filter>Header Files\dlls</Filter>
     </ClInclude>
     <ClInclude Include="..\..\dlls\animation.h">
+      <Filter>Header Files\dlls</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\dlls\armorman.h">
       <Filter>Header Files\dlls</Filter>
     </ClInclude>
     <ClInclude Include="..\..\dlls\basemonster.h">
