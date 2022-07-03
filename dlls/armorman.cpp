@@ -52,6 +52,12 @@ Task_t tlArmorManReload[] =
 		{TASK_PLAY_SEQUENCE, ACT_RELOAD},
 };
 
+Task_t tlArmorManShield[] =
+	{
+		{TASK_STOP_MOVING, 0.0f},
+		{TASK_PLAY_SEQUENCE_FACE_ENEMY, ACT_EXCITED},
+};
+
 Schedule_t slArmorManReload[] =
 	{
 		{tlArmorManReload,
@@ -61,8 +67,18 @@ Schedule_t slArmorManReload[] =
 			"ArmorMan Reload"},
 };
 
+Schedule_t slArmorManShield[] =
+	{
+		{tlArmorManShield,
+			ARRAYSIZE(tlArmorManShield),
+			0,
+			0,
+			"ArmorMan Shield"},
+};
+
 DEFINE_CUSTOM_SCHEDULES(CArmorMan) {
 	slArmorManReload,
+	slArmorManShield,
 };
 IMPLEMENT_CUSTOM_SCHEDULES(CArmorMan, CBaseMonster);
 
@@ -70,6 +86,8 @@ TYPEDESCRIPTION CArmorMan::m_SaveData[] =
 	{
 		DEFINE_FIELD(CArmorMan, m_bLastCheckAttackResult, FIELD_BOOLEAN),
 		DEFINE_FIELD(CArmorMan, m_flNextCheckAttackTime, FIELD_TIME),
+
+		DEFINE_FIELD(CArmorMan, m_flNextShieldTime, FIELD_TIME),
 };
 IMPLEMENT_SAVERESTORE(CArmorMan, CBaseMonster);
 
@@ -193,18 +211,32 @@ void CArmorMan::HandleAnimEvent(MonsterEvent_t* pEvent)
 
 Schedule_t* CArmorMan::GetSchedule()
 {
-	if (m_MonsterState == MONSTERSTATE_COMBAT && HasConditions(bits_COND_NO_AMMO_LOADED))
+	if (m_MonsterState != MONSTERSTATE_COMBAT)
+		return CBaseMonster::GetSchedule();
+
+	if (HasConditions(bits_COND_NO_AMMO_LOADED))
 		return GetScheduleOfType(SCHED_RELOAD);
+
+	if (m_hEnemy && pev->health <= (gSkillData.armormanHealth / 2) && gpGlobals->time > m_flNextShieldTime)
+	{
+		m_flNextShieldTime = gpGlobals->time + 30.0f;
+		return GetScheduleOfType(SCHED_COWER);
+	}
 
 	return CBaseMonster::GetSchedule();
 }
 
 Schedule_t* CArmorMan::GetScheduleOfType(int Type)
 {
-	if (Type == SCHED_RELOAD)
+	switch (Type)
+	{
+	case SCHED_RELOAD:
 		return slArmorManReload;
-
-	return CBaseMonster::GetScheduleOfType(Type);
+	case SCHED_COWER:
+		return slArmorManShield;
+	default:
+		return CBaseMonster::GetScheduleOfType(Type);
+	}
 }
 
 void CArmorMan::RunTask(Task_t* pTask)
@@ -216,4 +248,22 @@ void CArmorMan::RunTask(Task_t* pTask)
 	}
 
 	CBaseMonster::RunTask(pTask);
+}
+
+
+
+void CArmorMan::TraceAttack(entvars_t* pevAttacker, float flDamage, Vector vecDir, TraceResult* ptr, int bitsDamageType)
+{
+	if (ptr->iHitgroup == 1)
+	{
+		if (bitsDamageType & (DMG_BULLET | DMG_SLASH | DMG_BLAST | DMG_CLUB))
+		{
+			UTIL_Ricochet(ptr->vecEndPos, 1.0f);
+			flDamage = 0.01f;
+		}
+
+		ptr->iHitgroup = HITGROUP_LEFTARM;
+	}
+
+	CBaseMonster::TraceAttack(pevAttacker, flDamage, vecDir, ptr, bitsDamageType);
 }

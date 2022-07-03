@@ -59,6 +59,8 @@ public:
 	Schedule_t* GetScheduleOfType(int Type) override;
 	void RunTask(Task_t* pTask) override;
 
+	void TraceAttack(entvars_t* pevAttacker, float flDamage, Vector vecDir, TraceResult* ptr, int bitsDamageType) override;
+
 	bool Save(CSave& save) override;
 	bool Restore(CRestore& restore) override;
 	static TYPEDESCRIPTION m_SaveData[];
@@ -67,4 +69,6 @@ public:
 private:
 	bool m_bLastCheckAttackResult;
 	float m_flNextCheckAttackTime;
+
+	float m_flNextShieldTime;
 };
