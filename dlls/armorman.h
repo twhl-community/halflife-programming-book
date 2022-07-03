@@ -59,6 +59,7 @@ public:
 	Schedule_t* GetScheduleOfType(int Type) override;
 	void RunTask(Task_t* pTask) override;
 
+	void Killed(entvars_t* pevAttacker, int iGib) override;
 	bool TakeDamage(entvars_t* pevInflictor, entvars_t* pevAttacker, float flDamage, int bitsDamageType) override;
 	void TraceAttack(entvars_t* pevAttacker, float flDamage, Vector vecDir, TraceResult* ptr, int bitsDamageType) override;
 

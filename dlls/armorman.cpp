@@ -287,6 +287,27 @@ void CArmorMan::RunTask(Task_t* pTask)
 
 
 
+void CArmorMan::Killed(entvars_t* pevAttacker, int iGib)
+{
+	if (pev->body < 1) // Shotgun in hand
+	{
+		pev->body = 0; // No shotgun
+
+		// This part retrieves the position and angles of the attachment that is the shotgun
+		// You could just use "pev->origin" and "pev->angles" for "DropItem" but the dropped
+		// item would look like dropped from the stomach which would be a bit weird
+		Vector vecGunPos;
+		Vector vecGunAng;
+		GetAttachment(0, vecGunPos, vecGunAng);
+		vecGunAng.x = 0.0f;
+		vecGunAng.z = 0.0f;
+
+		DropItem("ammo_buckshot", vecGunPos, vecGunAng);
+	}
+
+	CBaseMonster::Killed(pevAttacker, iGib);
+}
+
 bool CArmorMan::TakeDamage(entvars_t* pevInflictor, entvars_t* pevAttacker, float flDamage, int bitsDamageType)
 {
 	// HACK HACK -- until we fix this.
