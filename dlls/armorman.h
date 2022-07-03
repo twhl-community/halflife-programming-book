@@ -59,7 +59,19 @@ public:
 	Schedule_t* GetScheduleOfType(int Type) override;
 	void RunTask(Task_t* pTask) override;
 
+	bool TakeDamage(entvars_t* pevInflictor, entvars_t* pevAttacker, float flDamage, int bitsDamageType) override;
 	void TraceAttack(entvars_t* pevAttacker, float flDamage, Vector vecDir, TraceResult* ptr, int bitsDamageType) override;
+
+	void AlertSound() override;
+	void DeathSound() override;
+	void IdleSound() override;
+	void PainSound() override;
+
+	static const char* pAlertSounds[];
+	static const char* pDeathSounds[];
+	static const char* pIdleSounds[];
+	static const char* pPainSounds[];
+	static const char* pStepSounds[];
 
 	bool Save(CSave& save) override;
 	bool Restore(CRestore& restore) override;

@@ -93,6 +93,35 @@ IMPLEMENT_SAVERESTORE(CArmorMan, CBaseMonster);
 
 LINK_ENTITY_TO_CLASS(monster_armorman, CArmorMan);
 
+const char* CArmorMan::pAlertSounds[] =
+	{
+		"armorman/am_alert1.wav",
+		"armorman/am_alert2.wav",
+		"armorman/am_alert3.wav"};
+
+const char* CArmorMan::pDeathSounds[] =
+	{
+		"armorman/am_die1.wav",
+		"armorman/am_die2.wav"};
+
+const char* CArmorMan::pIdleSounds[] =
+	{
+		"armorman/am_idle1.wav",
+		"armorman/am_idle2.wav",
+		"armorman/am_idle3.wav"};
+
+const char* CArmorMan::pPainSounds[] =
+	{
+		"armorman/am_pain1.wav",
+		"armorman/am_pain2.wav"};
+
+const char* CArmorMan::pStepSounds[] =
+	{
+		"armorman/am_step1.wav",
+		"armorman/am_step2.wav",
+		"armorman/am_step3.wav",
+		"armorman/am_step4.wav"};
+
 
 
 void CArmorMan::Spawn()
@@ -122,6 +151,12 @@ void CArmorMan::Precache()
 
 	PRECACHE_SOUND("weapons/dbarrel1.wav");
 	PRECACHE_SOUND("weapons/sbarrel1.wav");
+
+	PRECACHE_SOUND_ARRAY(pAlertSounds);
+	PRECACHE_SOUND_ARRAY(pDeathSounds);
+	PRECACHE_SOUND_ARRAY(pIdleSounds);
+	PRECACHE_SOUND_ARRAY(pPainSounds);
+	PRECACHE_SOUND_ARRAY(pStepSounds);
 }
 
 int CArmorMan::Classify()
@@ -252,6 +287,15 @@ void CArmorMan::RunTask(Task_t* pTask)
 
 
 
+bool CArmorMan::TakeDamage(entvars_t* pevInflictor, entvars_t* pevAttacker, float flDamage, int bitsDamageType)
+{
+	// HACK HACK -- until we fix this.
+	if (IsAlive())
+		PainSound();
+
+	return CBaseMonster::TakeDamage(pevInflictor, pevAttacker, flDamage, bitsDamageType);
+}
+
 void CArmorMan::TraceAttack(entvars_t* pevAttacker, float flDamage, Vector vecDir, TraceResult* ptr, int bitsDamageType)
 {
 	if (ptr->iHitgroup == 1)
@@ -266,4 +310,26 @@ void CArmorMan::TraceAttack(entvars_t* pevAttacker, float flDamage, Vector vecDi
 	}
 
 	CBaseMonster::TraceAttack(pevAttacker, flDamage, vecDir, ptr, bitsDamageType);
+}
+
+
+
+void CArmorMan::AlertSound()
+{
+	EMIT_SOUND_DYN(ENT(pev), CHAN_VOICE, pAlertSounds[RANDOM_LONG(0, ARRAYSIZE(pAlertSounds) - 1)], 1.0f, ATTN_NORM, 0, 100 + RANDOM_LONG(-5, 5));
+}
+
+void CArmorMan::DeathSound()
+{
+	EMIT_SOUND_DYN(ENT(pev), CHAN_VOICE, pDeathSounds[RANDOM_LONG(0, ARRAYSIZE(pDeathSounds) - 1)], 1.0f, ATTN_NORM, 0, 100 + RANDOM_LONG(-5, 5));
+}
+
+void CArmorMan::IdleSound()
+{
+	EMIT_SOUND_DYN(ENT(pev), CHAN_VOICE, pIdleSounds[RANDOM_LONG(0, ARRAYSIZE(pIdleSounds) - 1)], 1.0f, ATTN_NORM, 0, 100 + RANDOM_LONG(-5, 5));
+}
+
+void CArmorMan::PainSound()
+{
+	EMIT_SOUND_DYN(ENT(pev), CHAN_VOICE, pPainSounds[RANDOM_LONG(0, ARRAYSIZE(pPainSounds) - 1)], 1.0f, ATTN_NORM, 0, 100 + RANDOM_LONG(-5, 5));
 }
