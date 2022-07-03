@@ -40,7 +40,7 @@ constexpr int ARMORMAN_AE_RELOAD = 5;
 
 #define ARMORMAN_SHOTGUN_OFFSET Vector(0.0f, 0.0f, 55.0f)
 
-class CArmorMan : public CBaseMonster
+class CArmorMan : public CSquadMonster
 {
 public:
 	void Spawn() override;
@@ -58,6 +58,7 @@ public:
 	Schedule_t* GetSchedule() override;
 	Schedule_t* GetScheduleOfType(int Type) override;
 	void RunTask(Task_t* pTask) override;
+	void PrescheduleThink() override;
 
 	void Killed(entvars_t* pevAttacker, int iGib) override;
 	bool TakeDamage(entvars_t* pevInflictor, entvars_t* pevAttacker, float flDamage, int bitsDamageType) override;

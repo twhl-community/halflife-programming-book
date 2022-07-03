@@ -39,6 +39,7 @@
 
 #include "monsters.h"
 #include "soundent.h"
+#include "squadmonster.h"
 #include "weapons.h"
 
 #include "armorman.h"
@@ -80,7 +81,7 @@ DEFINE_CUSTOM_SCHEDULES(CArmorMan) {
 	slArmorManReload,
 	slArmorManShield,
 };
-IMPLEMENT_CUSTOM_SCHEDULES(CArmorMan, CBaseMonster);
+IMPLEMENT_CUSTOM_SCHEDULES(CArmorMan, CSquadMonster);
 
 TYPEDESCRIPTION CArmorMan::m_SaveData[] =
 	{
@@ -89,7 +90,7 @@ TYPEDESCRIPTION CArmorMan::m_SaveData[] =
 
 		DEFINE_FIELD(CArmorMan, m_flNextShieldTime, FIELD_TIME),
 };
-IMPLEMENT_SAVERESTORE(CArmorMan, CBaseMonster);
+IMPLEMENT_SAVERESTORE(CArmorMan, CSquadMonster);
 
 LINK_ENTITY_TO_CLASS(monster_armorman, CArmorMan);
 
@@ -138,7 +139,7 @@ void CArmorMan::Spawn()
 	pev->view_ofs = Vector(0.0f, -10.0f, 110.0f);
 	m_flFieldOfView = VIEW_FIELD_WIDE;
 	m_MonsterState = MONSTERSTATE_NONE;
-	m_afCapability = bits_CAP_HEAR | bits_CAP_DOORS_GROUP | bits_CAP_TURN_HEAD | bits_CAP_RANGE_ATTACK1;
+	m_afCapability = bits_CAP_SQUAD | bits_CAP_HEAR | bits_CAP_DOORS_GROUP | bits_CAP_TURN_HEAD | bits_CAP_RANGE_ATTACK1;
 
 	m_cAmmoLoaded = 2;
 
@@ -238,7 +239,7 @@ void CArmorMan::HandleAnimEvent(MonsterEvent_t* pEvent)
 		ClearConditions(bits_COND_NO_AMMO_LOADED);
 		break;
 	default:
-		CBaseMonster::HandleAnimEvent(pEvent);
+		CSquadMonster::HandleAnimEvent(pEvent);
 	}
 }
 
@@ -247,7 +248,7 @@ void CArmorMan::HandleAnimEvent(MonsterEvent_t* pEvent)
 Schedule_t* CArmorMan::GetSchedule()
 {
 	if (m_MonsterState != MONSTERSTATE_COMBAT)
-		return CBaseMonster::GetSchedule();
+		return CSquadMonster::GetSchedule();
 
 	if (HasConditions(bits_COND_NO_AMMO_LOADED))
 		return GetScheduleOfType(SCHED_RELOAD);
@@ -258,7 +259,7 @@ Schedule_t* CArmorMan::GetSchedule()
 		return GetScheduleOfType(SCHED_COWER);
 	}
 
-	return CBaseMonster::GetSchedule();
+	return CSquadMonster::GetSchedule();
 }
 
 Schedule_t* CArmorMan::GetScheduleOfType(int Type)
@@ -270,7 +271,7 @@ Schedule_t* CArmorMan::GetScheduleOfType(int Type)
 	case SCHED_COWER:
 		return slArmorManShield;
 	default:
-		return CBaseMonster::GetScheduleOfType(Type);
+		return CSquadMonster::GetScheduleOfType(Type);
 	}
 }
 
@@ -282,7 +283,24 @@ void CArmorMan::RunTask(Task_t* pTask)
 		return;
 	}
 
-	CBaseMonster::RunTask(pTask);
+	CSquadMonster::RunTask(pTask);
+}
+
+void CArmorMan::PrescheduleThink()
+{
+	if (!InSquad() || !m_hEnemy)
+		return;
+
+	if (HasConditions(bits_COND_SEE_ENEMY))
+	{
+		// update the squad's last enemy sighting time.
+		MySquadLeader()->m_flLastEnemySightTime = gpGlobals->time;
+	}
+	else
+	{
+		if (gpGlobals->time - MySquadLeader()->m_flLastEnemySightTime > 5.0f) // been a while since we've seen the enemy
+			MySquadLeader()->m_fEnemyEluded = true;
+	}
 }
 
 
@@ -305,7 +323,7 @@ void CArmorMan::Killed(entvars_t* pevAttacker, int iGib)
 		DropItem("ammo_buckshot", vecGunPos, vecGunAng);
 	}
 
-	CBaseMonster::Killed(pevAttacker, iGib);
+	CSquadMonster::Killed(pevAttacker, iGib);
 }
 
 bool CArmorMan::TakeDamage(entvars_t* pevInflictor, entvars_t* pevAttacker, float flDamage, int bitsDamageType)
@@ -314,7 +332,7 @@ bool CArmorMan::TakeDamage(entvars_t* pevInflictor, entvars_t* pevAttacker, floa
 	if (IsAlive())
 		PainSound();
 
-	return CBaseMonster::TakeDamage(pevInflictor, pevAttacker, flDamage, bitsDamageType);
+	return CSquadMonster::TakeDamage(pevInflictor, pevAttacker, flDamage, bitsDamageType);
 }
 
 void CArmorMan::TraceAttack(entvars_t* pevAttacker, float flDamage, Vector vecDir, TraceResult* ptr, int bitsDamageType)
@@ -330,7 +348,7 @@ void CArmorMan::TraceAttack(entvars_t* pevAttacker, float flDamage, Vector vecDi
 		ptr->iHitgroup = HITGROUP_LEFTARM;
 	}
 
-	CBaseMonster::TraceAttack(pevAttacker, flDamage, vecDir, ptr, bitsDamageType);
+	CSquadMonster::TraceAttack(pevAttacker, flDamage, vecDir, ptr, bitsDamageType);
 }
 
 
