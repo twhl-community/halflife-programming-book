@@ -1031,6 +1031,9 @@ void ClientPrecache()
 
 	if (giPrecacheGrunt)
 		UTIL_PrecacheOther("monster_human_grunt");
+
+	if (giPrecacheFAssassin)
+		UTIL_PrecacheOther("monster_fassassin");
 }
 
 /*

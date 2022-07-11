@@ -392,6 +392,7 @@ inline void CBasePlayer::SetHasSuit(bool hasSuit)
 inline bool gInitHUD = true;
 inline bool gEvilImpulse101 = false;
 inline bool giPrecacheGrunt = false;
+inline bool giPrecacheFAssassin = false;
 
 /**
 *	@brief Display the game title if this key is set

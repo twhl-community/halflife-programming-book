@@ -3471,6 +3471,20 @@ void CBasePlayer::CheatImpulseCommands(int iImpulse)
 		break;
 	}
 
+	case 77:
+	{
+		if (!giPrecacheFAssassin)
+		{
+			giPrecacheFAssassin = true;
+			ALERT(at_console, "You must now restart to use Friendly Assassin-o-matic.\n");
+		}
+		else
+		{
+			UTIL_MakeVectors(Vector(0.0f, pev->v_angle.y, 0.0f));
+			Create("monster_fassassin", pev->origin + gpGlobals->v_forward * 128.0f, pev->angles);
+		}
+		break;
+	}
 
 	case 101:
 		gEvilImpulse101 = true;
