@@ -29,7 +29,7 @@
 constexpr int FASSASSIN_AE_SHOOT = 1;
 constexpr int FASSASSIN_AE_SHOOT_HEALING_DART = 2;
 
-class CFAssassin : public CBaseMonster
+class CFAssassin : public CTalkMonster
 {
 public:
 	void Spawn() override;
@@ -37,16 +37,23 @@ public:
 
 	int Classify() override;
 	int ISoundMask() override;
+	int ObjectCaps() override;
 	void SetYawSpeed() override;
 
 	bool CheckRangeAttack1(float flDot, float flDist) override;
 
 	void HandleAnimEvent(MonsterEvent_t* pEvent) override;
 
+	void DeclineFollowing() override;
 	Schedule_t* GetSchedule() override;
 	Schedule_t* GetScheduleOfType(int Type) override;
 
+	bool TakeDamage(entvars_t* pevInflictor, entvars_t* pevAttacker, float flDamage, int bitsDamageType) override;
 	void Killed(entvars_t* pevAttacker, int iGib) override;
+
+	void AlertSound() override;
+	void DeathSound() override;
+	void PainSound() override;
 
 	bool Save(CSave& save) override;
 	bool Restore(CRestore& restore) override;
@@ -63,6 +70,8 @@ private:
 	float m_flLastHealTime;
 
 	int m_iShell;
+
+	float m_flPainTime;
 };
 
 

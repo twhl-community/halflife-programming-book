@@ -28,13 +28,37 @@
 #include "util.h"
 #include "cbase.h"
 
+#include "defaultai.h"
 #include "monsters.h"
 #include "soundent.h"
+#include "talkmonster.h"
 #include "weapons.h"
 
 #include "fassassin.h"
 
 
+
+Task_t tlFAssassinFaceTarget[] =
+	{
+		{TASK_SET_ACTIVITY, (float)ACT_IDLE},
+		{TASK_FACE_TARGET, 0.0f},
+		{TASK_SET_ACTIVITY, (float)ACT_IDLE},
+		{TASK_SET_SCHEDULE, (float)SCHED_TARGET_CHASE},
+};
+
+Schedule_t slFAssassinFaceTarget[] =
+	{
+		{tlFAssassinFaceTarget,
+			ARRAYSIZE(tlFAssassinFaceTarget),
+			bits_COND_CLIENT_PUSH |
+				bits_COND_NEW_ENEMY |
+				bits_COND_LIGHT_DAMAGE |
+				bits_COND_HEAVY_DAMAGE |
+				bits_COND_HEAR_SOUND |
+				bits_COND_PROVOKED,
+			bits_SOUND_DANGER,
+			"FAssassinFaceTarget"},
+};
 
 Task_t tlFAssassinFail[] =
 	{
@@ -58,6 +82,25 @@ Schedule_t slFAssassinFail[] =
 			bits_SOUND_DANGER |
 				bits_SOUND_PLAYER,
 			"FAssassinFail"},
+};
+
+Task_t tlFAssassinFollow[] =
+	{
+		{TASK_MOVE_TO_TARGET_RANGE, 128.0f},
+		{TASK_SET_SCHEDULE, (float)SCHED_TARGET_FACE},
+};
+
+Schedule_t slFAssassinFollow[] =
+	{
+		{tlFAssassinFollow,
+			ARRAYSIZE(tlFAssassinFollow),
+			bits_COND_NEW_ENEMY |
+				bits_COND_LIGHT_DAMAGE |
+				bits_COND_HEAVY_DAMAGE |
+				bits_COND_HEAR_SOUND |
+				bits_COND_PROVOKED,
+			bits_SOUND_DANGER,
+			"FAssassinFollow"},
 };
 
 Task_t tlFAssassinHide[] =
@@ -169,16 +212,46 @@ Schedule_t slFAssassinTakeCoverFromEnemy2[] =
 			"FAssassinTakeCoverFromEnemy2"},
 };
 
+Task_t tlIdleFAssassinStand[] =
+	{
+		{TASK_STOP_MOVING, 0.0f},
+		{TASK_SET_ACTIVITY, (float)ACT_IDLE},
+		{TASK_WAIT, 2.0f},
+		{TASK_TLK_HEADRESET, 0.0f},
+};
+
+Schedule_t slIdleFAssassinStand[] =
+	{
+		{tlIdleFAssassinStand,
+			ARRAYSIZE(tlIdleFAssassinStand),
+			bits_COND_NEW_ENEMY |
+				bits_COND_LIGHT_DAMAGE |
+				bits_COND_HEAVY_DAMAGE |
+				bits_COND_HEAR_SOUND |
+				bits_COND_SMELL |
+				bits_COND_PROVOKED,
+
+			bits_SOUND_COMBAT |
+				bits_SOUND_DANGER |
+				bits_SOUND_MEAT |
+				bits_SOUND_CARCASS |
+				bits_SOUND_GARBAGE,
+			"FAssassinIdleStand"},
+};
+
 DEFINE_CUSTOM_SCHEDULES(CFAssassin) {
+	slFAssassinFaceTarget,
 	slFAssassinFail,
+	slFAssassinFollow,
 	slFAssassinHide,
 	slFAssassinHunt,
 	slFAssassinTakeCoverFromBestSound,
 	slFAssassinTakeCoverFromEnemy,
 	slFAssassinTakeCoverFromEnemy2,
+	slIdleFAssassinStand,
 };
 
-IMPLEMENT_CUSTOM_SCHEDULES(CFAssassin, CBaseMonster);
+IMPLEMENT_CUSTOM_SCHEDULES(CFAssassin, CTalkMonster);
 
 TYPEDESCRIPTION CFAssassin::m_SaveData[] =
 	{
@@ -187,9 +260,11 @@ TYPEDESCRIPTION CFAssassin::m_SaveData[] =
 
 		DEFINE_FIELD(CFAssassin, m_pHealTarget, FIELD_EHANDLE),
 		DEFINE_FIELD(CFAssassin, m_flLastHealTime, FIELD_TIME),
+
+		DEFINE_FIELD(CFAssassin, m_flPainTime, FIELD_TIME),
 };
 
-IMPLEMENT_SAVERESTORE(CFAssassin, CBaseMonster);
+IMPLEMENT_SAVERESTORE(CFAssassin, CTalkMonster);
 
 LINK_ENTITY_TO_CLASS(monster_fassassin, CFAssassin);
 
@@ -213,11 +288,15 @@ void CFAssassin::Spawn()
 	m_HackedGunPos = Vector(0.0f, 24.0f, 48.0f);
 
 	MonsterInit();
+	SetUse(&CFAssassin::FollowerUse);
 }
 
 void CFAssassin::Precache()
 {
 	PRECACHE_MODEL("models/fassassin.mdl");
+
+	PRECACHE_SOUND("fassassin/fa_die1.wav");
+	PRECACHE_SOUND("fassassin/fa_pain1.wav");
 
 	PRECACHE_SOUND("weapons/pl_gun1.wav");
 	PRECACHE_SOUND("weapons/pl_gun2.wav");
@@ -225,6 +304,33 @@ void CFAssassin::Precache()
 	m_iShell = PRECACHE_MODEL("models/shell.mdl");
 
 	UTIL_PrecacheOther("healing_dart");
+
+	CTalkMonster::TalkInit();
+	m_szGrp[TLK_ANSWER] = "FA_ANSWER";
+	m_szGrp[TLK_QUESTION] = "FA_QUESTION";
+	m_szGrp[TLK_IDLE] = "FA_IDLE";
+	m_szGrp[TLK_STARE] = "FA_STARE";
+	m_szGrp[TLK_USE] = "FA_OK";
+	m_szGrp[TLK_UNUSE] = "FA_WAIT";
+	m_szGrp[TLK_STOP] = "FA_STOP";
+
+	m_szGrp[TLK_NOSHOOT] = "FA_SCARED";
+	m_szGrp[TLK_HELLO] = "FA_HELLO";
+
+	m_szGrp[TLK_PLHURT1] = "!FA_CUREA";
+	m_szGrp[TLK_PLHURT2] = "!FA_CUREB";
+	m_szGrp[TLK_PLHURT3] = "!FA_CUREC";
+
+	m_szGrp[TLK_PHELLO] = nullptr;
+	m_szGrp[TLK_PIDLE] = nullptr;
+	m_szGrp[TLK_PQUESTION] = "FA_PQUEST";
+
+	m_szGrp[TLK_SMELL] = "FA_SMELL";
+
+	m_szGrp[TLK_WOUND] = "FA_WOUND";
+	m_szGrp[TLK_MORTAL] = "FA_MORTAL";
+	m_voicePitch = PITCH_NORM;
+	CTalkMonster::Precache();
 }
 
 
@@ -243,6 +349,11 @@ int CFAssassin::ISoundMask()
 		bits_SOUND_GARBAGE |
 		bits_SOUND_DANGER |
 		bits_SOUND_PLAYER;
+}
+
+int CFAssassin::ObjectCaps()
+{
+	return CTalkMonster::ObjectCaps() | FCAP_IMPULSE_USE;
 }
 
 void CFAssassin::SetYawSpeed()
@@ -346,11 +457,16 @@ void CFAssassin::HandleAnimEvent(MonsterEvent_t* pEvent)
 	}
 	break;
 	default:
-		CBaseMonster::HandleAnimEvent(pEvent);
+		CTalkMonster::HandleAnimEvent(pEvent);
 	}
 }
 
 
+
+void CFAssassin::DeclineFollowing()
+{
+	PlaySentence("FA_POK", 2.0f, VOL_NORM, ATTN_NORM);
+}
 
 Schedule_t* CFAssassin::GetSchedule()
 {
@@ -365,23 +481,58 @@ Schedule_t* CFAssassin::GetSchedule()
 	if (m_pHealTarget)
 		return GetScheduleOfType(SCHED_RANGE_ATTACK2);
 
-	if (m_MonsterState != MONSTERSTATE_COMBAT || HasConditions(bits_COND_ENEMY_DEAD))
-		return CBaseMonster::GetSchedule();
+	switch (m_MonsterState)
+	{
+	case MONSTERSTATE_COMBAT:
+	{
+		if (HasConditions(bits_COND_ENEMY_DEAD))
+			return CTalkMonster::GetSchedule();
 
-	if (HasConditions(bits_COND_CAN_RANGE_ATTACK1))
-		return GetScheduleOfType(SCHED_RANGE_ATTACK1);
+		if (HasConditions(bits_COND_HEAVY_DAMAGE))
+			return GetScheduleOfType(SCHED_TAKE_COVER_FROM_ENEMY);
 
-	if (HasConditions(bits_COND_SEE_ENEMY))
-		return GetScheduleOfType(SCHED_COMBAT_FACE);
+		if (HasConditions(bits_COND_CAN_RANGE_ATTACK1))
+			return GetScheduleOfType(SCHED_RANGE_ATTACK1);
 
-	if (HasConditions(bits_COND_NEW_ENEMY))
-		return GetScheduleOfType(SCHED_TAKE_COVER_FROM_ENEMY);
+		if (HasConditions(bits_COND_SEE_ENEMY))
+			return GetScheduleOfType(SCHED_COMBAT_FACE);
+	}
+	break;
+	case MONSTERSTATE_ALERT:
+	case MONSTERSTATE_IDLE:
+	{
+		if (m_hEnemy == nullptr && IsFollowing())
+		{
+			if (!m_hTargetEnt->IsAlive())
+			{
+				StopFollowing(false);
+				break;
+			}
+			else
+			{
+				if (HasConditions(bits_COND_CLIENT_PUSH))
+					return GetScheduleOfType(SCHED_MOVE_AWAY_FOLLOW);
 
-	return GetScheduleOfType(SCHED_ALERT_STAND);
+				return GetScheduleOfType(SCHED_TARGET_FACE);
+			}
+		}
+
+		if (HasConditions(bits_COND_CLIENT_PUSH))
+			return GetScheduleOfType(SCHED_MOVE_AWAY);
+
+		TrySmellTalk();
+		return GetScheduleOfType(SCHED_ALERT_STAND);
+	}
+	break;
+	}
+
+	return CTalkMonster::GetSchedule();
 }
 
 Schedule_t* CFAssassin::GetScheduleOfType(int Type)
 {
+	Schedule_t* pSched;
+
 	switch (Type)
 	{
 	case SCHED_TAKE_COVER_FROM_ENEMY:
@@ -398,9 +549,27 @@ Schedule_t* CFAssassin::GetScheduleOfType(int Type)
 		break;
 	case SCHED_CHASE_ENEMY:
 		return slFAssassinHunt;
+	case SCHED_TARGET_CHASE:
+		return slFAssassinFollow;
+	case SCHED_TARGET_FACE:
+		pSched = CTalkMonster::GetScheduleOfType(Type);
+
+		if (pSched == slIdleStand)
+			return slFAssassinFaceTarget;
+		else
+			return pSched;
+		break;
+	case SCHED_IDLE_STAND:
+		pSched = CTalkMonster::GetScheduleOfType(Type);
+
+		if (pSched == slIdleStand)
+			return slIdleFAssassinStand;
+		else
+			return pSched;
+		break;
 	}
 
-	return CBaseMonster::GetScheduleOfType(Type);
+	return CTalkMonster::GetScheduleOfType(Type);
 }
 
 
@@ -417,7 +586,63 @@ void CFAssassin::Killed(entvars_t* pevAttacker, int iGib)
 		DropItem("weapon_9mmhandgun", vecOrigin, vecAngles);
 	}
 
-	CBaseMonster::Killed(pevAttacker, iGib);
+	CTalkMonster::Killed(pevAttacker, iGib);
+}
+
+bool CFAssassin::TakeDamage(entvars_t* pevInflictor, entvars_t* pevAttacker, float flDamage, int bitsDamageType)
+{
+	bool bReturn = CTalkMonster::TakeDamage(pevInflictor, pevAttacker, flDamage, bitsDamageType);
+	if (!IsAlive() || pev->deadflag == DEAD_DYING)
+		return bReturn;
+	
+	if (m_MonsterState == MONSTERSTATE_PRONE || (pevAttacker->flags & FL_CLIENT) == 0)
+		return bReturn;
+
+	if (m_hEnemy == nullptr)
+	{
+		if ((m_afMemory & bits_MEMORY_SUSPICIOUS) != 0 || IsFacing(pevAttacker, pev->origin))
+		{
+			PlaySentence("FA_MAD", 4.0f, VOL_NORM, ATTN_NORM);
+			Remember(bits_MEMORY_PROVOKED);
+			StopFollowing(true);
+		}
+		else
+		{
+			PlaySentence("FA_SHOT", 4.0f, VOL_NORM, ATTN_NORM);
+			Remember(bits_MEMORY_SUSPICIOUS);
+		}
+	}
+	else if (!(m_hEnemy->IsPlayer()) && pev->deadflag == DEAD_NO)
+	{
+		PlaySentence("FA_SHOT", 4.0f, VOL_NORM, ATTN_NORM);
+	}
+
+	return bReturn;
+}
+
+
+
+void CFAssassin::AlertSound()
+{
+	if (m_hEnemy == nullptr || !FOkToSpeak())
+		return;
+
+	PlaySentence("FA_ATTACK", RANDOM_FLOAT(2.8f, 3.2f), VOL_NORM, ATTN_IDLE);
+}
+
+void CFAssassin::DeathSound()
+{
+	EMIT_SOUND_DYN(ENT(pev), CHAN_VOICE, "fassassin/fa_die1.wav", VOL_NORM, ATTN_NORM, 0, GetVoicePitch());
+}
+
+void CFAssassin::PainSound()
+{
+	if (gpGlobals->time < m_flPainTime)
+		return;
+
+	m_flPainTime = gpGlobals->time + RANDOM_FLOAT(0.5f, 0.75f);
+
+	EMIT_SOUND_DYN(ENT(pev), CHAN_VOICE, "fassassin/fa_pain1.wav", VOL_NORM, ATTN_NORM, 0, GetVoicePitch());
 }
 
 
