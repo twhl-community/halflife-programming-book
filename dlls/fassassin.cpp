@@ -184,6 +184,9 @@ TYPEDESCRIPTION CFAssassin::m_SaveData[] =
 	{
 		DEFINE_FIELD(CFAssassin, m_flDiviation, FIELD_FLOAT),
 		DEFINE_FIELD(CFAssassin, m_flLastShot, FIELD_TIME),
+
+		DEFINE_FIELD(CFAssassin, m_pHealTarget, FIELD_EHANDLE),
+		DEFINE_FIELD(CFAssassin, m_flLastHealTime, FIELD_TIME),
 };
 
 IMPLEMENT_SAVERESTORE(CFAssassin, CBaseMonster);
@@ -205,7 +208,7 @@ void CFAssassin::Spawn()
 
 	m_flFieldOfView = VIEW_FIELD_WIDE;
 	m_MonsterState = MONSTERSTATE_NONE;
-	m_afCapability = bits_CAP_HEAR | bits_CAP_DOORS_GROUP | bits_CAP_TURN_HEAD | bits_CAP_RANGE_ATTACK1;
+	m_afCapability = bits_CAP_HEAR | bits_CAP_DOORS_GROUP | bits_CAP_TURN_HEAD | bits_CAP_RANGE_ATTACK1 | bits_CAP_RANGE_ATTACK2;
 
 	m_HackedGunPos = Vector(0.0f, 24.0f, 48.0f);
 
@@ -220,6 +223,8 @@ void CFAssassin::Precache()
 	PRECACHE_SOUND("weapons/pl_gun2.wav");
 
 	m_iShell = PRECACHE_MODEL("models/shell.mdl");
+
+	UTIL_PrecacheOther("healing_dart");
 }
 
 
@@ -262,47 +267,87 @@ bool CFAssassin::CheckRangeAttack1(float flDot, float flDist)
 
 void CFAssassin::HandleAnimEvent(MonsterEvent_t* pEvent)
 {
-	if (pEvent->event != 1)
-		return;
-
-	if (m_hEnemy == nullptr)
-		return;
-
-	Vector vecOrigin = GetGunPosition();
-	Vector vecDir = ShootAtEnemy(vecOrigin);
-
-	if (m_flLastShot + 2.0f < gpGlobals->time)
+	switch (pEvent->event)
 	{
-		m_flDiviation = 0.10f;
-	}
-	else
+	case FASSASSIN_AE_SHOOT:
 	{
-		m_flDiviation -= 0.01f;
-		if (m_flDiviation < 0.02f)
-			m_flDiviation = 0.02f;
+		Vector vecOrigin = GetGunPosition();
+		Vector vecDir = ShootAtEnemy(vecOrigin);
+
+		if (m_flLastShot + 2.0f < gpGlobals->time)
+		{
+			m_flDiviation = 0.10f;
+		}
+		else
+		{
+			m_flDiviation -= 0.01f;
+			if (m_flDiviation < 0.02f)
+				m_flDiviation = 0.02f;
+		}
+		m_flLastShot = gpGlobals->time;
+
+		UTIL_MakeVectors(pev->angles);
+
+		Vector vecShellVelocity = gpGlobals->v_right * RANDOM_FLOAT(40.0f, 90.0f) + gpGlobals->v_up * RANDOM_FLOAT(75.0f, 200.0f) + gpGlobals->v_forward * RANDOM_FLOAT(-40.0f, 40.0f);
+		EjectBrass(pev->origin + gpGlobals->v_up * 32.0f + gpGlobals->v_forward * 12.0f, vecShellVelocity, pev->angles.y, m_iShell, TE_BOUNCE_SHELL);
+		FireBullets(1, vecOrigin, vecDir, Vector(m_flDiviation, m_flDiviation, m_flDiviation), 2048.0f, BULLET_MONSTER_9MM);
+
+		switch (RANDOM_LONG(0, 1))
+		{
+		case 0:
+			EMIT_SOUND(ENT(pev), CHAN_WEAPON, "weapons/pl_gun1.wav", RANDOM_FLOAT(0.6f, 0.8f), ATTN_NORM);
+			break;
+		case 1:
+			EMIT_SOUND(ENT(pev), CHAN_WEAPON, "weapons/pl_gun2.wav", RANDOM_FLOAT(0.6f, 0.8f), ATTN_NORM);
+			break;
+		}
+
+		pev->effects |= EF_MUZZLEFLASH;
+
+		Vector angDir = UTIL_VecToAngles(vecDir);
+		SetBlending(0, angDir.x);
 	}
-	m_flLastShot = gpGlobals->time;
-
-	UTIL_MakeVectors(pev->angles);
-
-	Vector vecShellVelocity = gpGlobals->v_right * RANDOM_FLOAT(40.0f, 90.0f) + gpGlobals->v_up * RANDOM_FLOAT(75.0f, 200.0f) + gpGlobals->v_forward * RANDOM_FLOAT(-40.0f, 40.0f);
-	EjectBrass(pev->origin + gpGlobals->v_up * 32.0f + gpGlobals->v_forward * 12.0f, vecShellVelocity, pev->angles.y, m_iShell, TE_BOUNCE_SHELL);
-	FireBullets(1, vecOrigin, vecDir, Vector(m_flDiviation, m_flDiviation, m_flDiviation), 2048.0f, BULLET_MONSTER_9MM);
-
-	switch (RANDOM_LONG(0, 1))
+	break;
+	case FASSASSIN_AE_SHOOT_HEALING_DART:
 	{
-	case 0:
-		EMIT_SOUND(ENT(pev), CHAN_WEAPON, "weapons/pl_gun1.wav", RANDOM_FLOAT(0.6f, 0.8f), ATTN_NORM);
-		break;
-	case 1:
-		EMIT_SOUND(ENT(pev), CHAN_WEAPON, "weapons/pl_gun2.wav", RANDOM_FLOAT(0.6f, 0.8f), ATTN_NORM);
-		break;
+		Vector vecOrigin = GetGunPosition();
+		Vector vecDir = gpGlobals->v_forward;
+		if (m_pHealTarget)
+		{
+			MakeIdealYaw(m_pHealTarget->pev->origin);
+			ChangeYaw(pev->yaw_speed);
+			vecDir = ((m_pHealTarget->BodyTarget(vecOrigin) - m_pHealTarget->pev->origin) + m_pHealTarget->pev->origin - vecOrigin).Normalize();
+		}
+
+		CHealingDart* pDart = CHealingDart::DartCreate();
+		pDart->pev->origin = vecOrigin;
+		pDart->pev->angles = UTIL_VecToAngles(vecDir);
+		pDart->pev->owner = edict();
+		pDart->pev->velocity = vecDir * 2048.0f;
+		pDart->pev->speed = 2048.0f;
+		pDart->pev->avelocity.z = 10.0f;
+
+		switch (RANDOM_LONG(0, 1))
+		{
+		case 0:
+			EMIT_SOUND_DYN(ENT(pev), CHAN_WEAPON, "weapons/pl_gun1.wav", VOL_NORM, ATTN_NORM, 0, 150);
+			break;
+		case 1:
+			EMIT_SOUND_DYN(ENT(pev), CHAN_WEAPON, "weapons/pl_gun1.wav", VOL_NORM, ATTN_NORM, 0, 150);
+			break;
+		}
+
+		pev->effects |= EF_MUZZLEFLASH;
+
+		Vector angDir = UTIL_VecToAngles(vecDir);
+		SetBlending(0, angDir.x);
+		m_flLastHealTime = gpGlobals->time + 10.0f;
+		m_pHealTarget = nullptr;
 	}
-
-	pev->effects |= EF_MUZZLEFLASH;
-
-	Vector angDir = UTIL_VecToAngles(vecDir);
-	SetBlending(0, angDir.x);
+	break;
+	default:
+		CBaseMonster::HandleAnimEvent(pEvent);
+	}
 }
 
 
@@ -315,6 +360,10 @@ Schedule_t* CFAssassin::GetSchedule()
 		if (pSound && (pSound->m_iType & bits_SOUND_DANGER) != 0)
 			return GetScheduleOfType(SCHED_TAKE_COVER_FROM_BEST_SOUND);
 	}
+
+	m_pHealTarget = CheckHealTarget();
+	if (m_pHealTarget)
+		return GetScheduleOfType(SCHED_RANGE_ATTACK2);
 
 	if (m_MonsterState != MONSTERSTATE_COMBAT || HasConditions(bits_COND_ENEMY_DEAD))
 		return CBaseMonster::GetSchedule();
@@ -369,4 +418,139 @@ void CFAssassin::Killed(entvars_t* pevAttacker, int iGib)
 	}
 
 	CBaseMonster::Killed(pevAttacker, iGib);
+}
+
+
+
+CBaseEntity* CFAssassin::CheckHealTarget()
+{
+	if (m_flLastHealTime > gpGlobals->time)
+		return nullptr;
+
+	CBaseEntity* pTarget = nullptr;
+	while ((pTarget = UTIL_FindEntityInSphere(pTarget, pev->origin, 256.0f)) != nullptr)
+	{
+		if (pTarget->MyMonsterPointer() == nullptr || !pTarget->IsAlive() || IRelationship(pTarget) != R_AL || pTarget->pev->velocity.Length() > 64.0f)
+			continue;
+
+		if (pTarget->IsPlayer() && pTarget->pev->health <= pTarget->pev->max_health / 2.0f)
+			return pTarget;
+
+		if (!pTarget->IsPlayer() && pTarget->pev->health <= 10)
+			return pTarget;
+	}
+	return nullptr;
+}
+
+
+
+LINK_ENTITY_TO_CLASS(healing_dart, CHealingDart);
+
+CHealingDart* CHealingDart::DartCreate()
+{
+	CHealingDart* pDart = GetClassPtr((CHealingDart*)nullptr);
+	pDart->pev->classname = MAKE_STRING("healing_dart");
+	pDart->Spawn();
+	return pDart;
+}
+
+
+
+void CHealingDart::Spawn()
+{
+	Precache();
+	pev->movetype = MOVETYPE_FLY;
+	pev->solid = SOLID_BBOX;
+
+	pev->gravity = 0.5f;
+
+	SET_MODEL(ENT(pev), "models/crossbow_bolt.mdl");
+
+	UTIL_SetOrigin(pev, pev->origin);
+	UTIL_SetSize(pev, Vector(0.0f, 0.0f, 0.0f), Vector(0.0f, 0.0f, 0.0f));
+
+	SetTouch(&CHealingDart::DartTouch);
+	SetThink(&CHealingDart::BubbleThink);
+	pev->nextthink = gpGlobals->time + 0.2f;
+}
+
+
+void CHealingDart::Precache()
+{
+	PRECACHE_MODEL("models/crossbow_bolt.mdl");
+
+	PRECACHE_SOUND("weapons/xbow_hitbod1.wav");
+	PRECACHE_SOUND("weapons/xbow_hitbod2.wav");
+	PRECACHE_SOUND("weapons/xbow_hit1.wav");
+
+	m_iTrail = PRECACHE_MODEL("sprites/streak.spr");
+}
+
+
+
+int CHealingDart::Classify()
+{
+	return CLASS_NONE;
+}
+
+
+
+void CHealingDart::DartTouch(CBaseEntity* pOther)
+{
+	SetTouch(nullptr);
+	SetThink(nullptr);
+
+	if (0 != pOther->pev->takedamage)
+	{
+		TraceResult tr = UTIL_GetGlobalTrace();
+		entvars_t* pevOwner = VARS(pev->owner);
+
+		if (pOther->IsAlive())
+			pOther->TakeHealth(25.0f, DMG_GENERIC);
+
+		pev->velocity = Vector(0.0f, 0.0f, 0.0f);
+		switch (RANDOM_LONG(0, 1))
+		{
+		case 0:
+			EMIT_SOUND(ENT(pev), CHAN_BODY, "weapons/xbow_hitbod1.wav", VOL_NORM, ATTN_NORM);
+			break;
+		case 1:
+			EMIT_SOUND(ENT(pev), CHAN_BODY, "weapons/xbow_hitbod2.wav", VOL_NORM, ATTN_NORM);
+			break;
+		}
+
+		Killed(pev, GIB_NEVER);
+	}
+	else
+	{
+		EMIT_SOUND_DYN(ENT(pev), CHAN_BODY, "weapons/xbow_hit1.wav", RANDOM_FLOAT(0.95f, 1.0f), ATTN_NORM, 0, 98 + RANDOM_LONG(0, 7));
+
+		SetThink(&CHealingDart::SUB_Remove);
+		pev->nextthink = gpGlobals->time;
+
+		if (FClassnameIs(pOther->pev, "worldspawn"))
+		{
+			Vector vecDir = pev->velocity.Normalize();
+			UTIL_SetOrigin(pev, pev->origin - vecDir * 12.0f);
+			pev->angles = UTIL_VecToAngles(vecDir);
+			pev->solid = SOLID_NOT;
+			pev->movetype = MOVETYPE_FLY;
+			pev->velocity = Vector(0.0f, 0.0f, 0.0f);
+			pev->avelocity.z = 0.0f;
+			pev->angles.z = RANDOM_LONG(0.0f, 360.0f);
+			pev->nextthink = gpGlobals->time + 10.0f;
+		}
+
+		if (UTIL_PointContents(pev->origin) != CONTENTS_WATER)
+			UTIL_Sparks(pev->origin);
+	}
+}
+
+void CHealingDart::BubbleThink()
+{
+	pev->nextthink = gpGlobals->time + 0.1f;
+	if (pev->waterlevel == 0)
+		return;
+
+	UTIL_BubbleTrail(pev->origin - pev->velocity * 0.1f, pev->origin, 1);
 }

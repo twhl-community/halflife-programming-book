@@ -26,6 +26,9 @@
 
 #pragma once
 
+constexpr int FASSASSIN_AE_SHOOT = 1;
+constexpr int FASSASSIN_AE_SHOOT_HEALING_DART = 2;
+
 class CFAssassin : public CBaseMonster
 {
 public:
@@ -51,8 +54,32 @@ public:
 
 	CUSTOM_SCHEDULES;
 private:
+	CBaseEntity* CheckHealTarget();
+
 	float m_flDiviation;
 	float m_flLastShot;
 
+	EHANDLE m_pHealTarget;
+	float m_flLastHealTime;
+
 	int m_iShell;
+};
+
+
+
+class CHealingDart : public CBaseEntity
+{
+public:
+	static CHealingDart* DartCreate();
+
+	void Spawn() override;
+	void Precache() override;
+
+	int Classify() override;
+
+	void EXPORT DartTouch(CBaseEntity* pOther);
+	void EXPORT BubbleThink();
+
+private:
+	int m_iTrail;
 };
